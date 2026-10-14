@@ -4403,4 +4403,47 @@ three/build/three.module.js:
    *)
 */
 </script>
+
+<style>
+#wui{position:fixed;right:max(14px,2vw);bottom:max(64px,9vh);z-index:40;display:none;flex-direction:column;align-items:flex-end;gap:8px;font:500 13px/1 "Noto Serif TC","PingFang TC",serif;letter-spacing:.12em}
+body.wui #wui{display:flex}
+#wui .r{display:flex;gap:6px}
+#wui span{all:unset;cursor:pointer;-webkit-tap-highlight-color:transparent;display:inline-flex;align-items:center;gap:6px;color:#f6efe0;background:rgba(42,35,25,.78);border:1px solid rgba(239,228,200,.35);padding:10px 14px;border-radius:30px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);transition:opacity .4s,background .3s}
+#wui span:active{background:rgba(154,123,79,.9)}
+#wui span i{font-style:italic;font-family:"Cormorant Garamond",Georgia,serif;font-size:13px;letter-spacing:.04em;opacity:.85}
+#wui span.big{font-size:14px;padding:12px 18px;background:rgba(154,123,79,.92);border-color:rgba(246,239,224,.6);animation:wuiP 2.4s ease-in-out infinite}
+@keyframes wuiP{50%{box-shadow:0 0 0 8px rgba(154,123,79,.18)}}
+#wui .h{display:none}
+body.wui-m #wui .m,body.wui-c #wui .c{display:flex}
+body.wui.cup #nav{opacity:0!important}
+</style>
+<div id="wui">
+ <div class="h m"><span class="big" id="wuiIn">♪ 欣賞國樂表演 <i>Watch the performance</i></span></div>
+ <div class="h c r"><span id="wuiPlay">▶ 播放 <i>Play</i></span><span id="wuiPrev">‹</span><span id="wuiNext">›</span></div>
+ <div class="h c"><span id="wuiBack">↩ 回到主軸 <i>Back to the scenes</i></span></div>
+</div>
+<script>
+(function(){
+ var embedded=false;try{embedded=window.self!==window.top}catch(e){embedded=true}
+ var touch=window.matchMedia&&matchMedia('(pointer:coarse)').matches;
+ if(!(embedded||touch||/[?&]ui\b/.test(location.search)))return;
+ var B=document.body;B.classList.add('wui');
+ function key(k,code){window.dispatchEvent(new KeyboardEvent('keydown',{key:k,code:code||'',bubbles:true,cancelable:true}));}
+ function wake(){window.dispatchEvent(new MouseEvent('mousemove'));}
+ function bind(id,fn){var el=document.getElementById(id);el.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();fn();sync();});}
+ bind('wuiIn',function(){var n=0;(function enter(){key(' ','Space');setTimeout(function(){if(B.classList.contains('cup'))return;if(B.classList.contains('paused'))key(' ','Space');if(++n<12)setTimeout(enter,700);},150);})();});
+ bind('wuiPlay',function(){key(' ','Space');});
+ bind('wuiPrev',function(){key('ArrowLeft');});
+ bind('wuiNext',function(){key('ArrowRight');});
+ bind('wuiBack',function(){key('6');setTimeout(wake,50);});
+ ['touchstart','pointerdown'].forEach(function(t){document.addEventListener(t,wake,{passive:true});});
+ function sync(){
+  var tag=document.getElementById('tagE'),cup=B.classList.contains('cup');
+  var music=tag&&/LIVE MUSIC/.test(tag.textContent);
+  B.classList.toggle('wui-c',cup);
+  B.classList.toggle('wui-m',music&&!cup);
+ }
+ setInterval(sync,400);sync();
+})();
+</script>
 </body></html>
