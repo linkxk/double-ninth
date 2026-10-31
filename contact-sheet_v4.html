@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>影片縮圖總覽 Contact Sheet</title>
+<style>
+  body{margin:0;padding:24px;background:#fff;color:#222;font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,Arial,sans-serif;}
+  .wrap{max-width:1100px;margin:0 auto;}
+  h1{font-size:20px;font-weight:600;margin:0 0 4px;}
+  p.sub{margin:0 0 16px;color:#777;font-size:13px;}
+  .tabs{display:flex;gap:0;margin:0 0 16px;border-bottom:1.5px solid #222;}
+  .tab{font:inherit;font-size:14px;padding:8px 18px;border:1.5px solid transparent;border-bottom:none;background:none;color:#777;cursor:pointer;margin-bottom:-1.5px;}
+  .tab.on{border-color:#222;background:#fff;color:#222;font-weight:600;}
+  .panel{display:none;}
+  .panel.on{display:block;}
+  .drop{border:1.5px dashed #999;padding:40px 20px;text-align:center;cursor:pointer;color:#555;transition:.2s;}
+  .drop.over{background:#f3f3f3;border-color:#222;}
+  .drop b{color:#222;}
+  .row{display:flex;flex-wrap:wrap;gap:16px;margin:16px 0;align-items:flex-end;}
+  label{font-size:12px;color:#666;display:flex;flex-direction:column;gap:4px;}
+  input,select{font:inherit;font-size:14px;padding:6px 8px;border:1px solid #bbb;background:#fff;color:#222;width:110px;box-sizing:border-box;}
+  input.wide{width:200px;}
+  .btn{font:inherit;font-size:14px;padding:8px 18px;border:1.5px solid #222;background:#fff;color:#222;cursor:pointer;}
+  .btn:hover{background:#222;color:#fff;}
+  .btn:disabled{opacity:.35;cursor:default;background:#fff;color:#222;}
+  .btn.sm{font-size:12px;padding:4px 10px;}
+  #status{font-size:13px;color:#777;margin:8px 0;min-height:18px;}
+  canvas{max-width:100%;height:auto;border:1px solid #ddd;display:block;}
+  #bar{height:3px;background:#eee;margin:8px 0;}
+  #bar i{display:block;height:100%;width:0;background:#222;transition:width .15s;}
+  #plist{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px;margin:12px 0;}
+  #plist:empty{display:none;}
+  .it{position:relative;border:1px solid #ddd;background:#fafafa;aspect-ratio:1;cursor:grab;overflow:hidden;}
+  .it img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;}
+  .it.drag{opacity:.35;}
+  .it.tgt{outline:2px solid #222;}
+  .it .n{position:absolute;left:0;bottom:0;font-size:11px;padding:1px 5px;background:rgba(255,255,255,.85);color:#222;}
+  .it .x{position:absolute;right:0;top:0;width:20px;height:20px;line-height:18px;text-align:center;font-size:14px;background:rgba(255,255,255,.85);color:#222;cursor:pointer;}
+  .it .x:hover{background:#222;color:#fff;}
+  .hint{font-size:12px;color:#999;margin:6px 0 0;}
+  :root{color-scheme:light dark;}
+  @media (prefers-color-scheme: dark){
+    body{background:#141414;color:#e8e8e8;}
+    p.sub,#status{color:#999;}
+    .tabs{border-bottom-color:#eee;}
+    .tab{color:#999;}
+    .tab.on{border-color:#eee;background:#141414;color:#eee;}
+    .drop{border-color:#666;color:#aaa;}
+    .drop.over{background:#222;border-color:#eee;}
+    .drop b{color:#eee;}
+    label{color:#999;}
+    input,select{background:#202020;color:#eee;border-color:#555;}
+    .btn{border-color:#eee;background:#141414;color:#eee;}
+    .btn:hover{background:#eee;color:#141414;}
+    .btn:disabled{background:#141414;color:#eee;}
+    canvas{border-color:#333;}
+    #bar{background:#333;}
+    #bar i{background:#eee;}
+    .it{border-color:#333;background:#1c1c1c;}
+    .it .n,.it .x{background:rgba(0,0,0,.75);color:#eee;}
+    .it .x:hover{background:#eee;color:#141414;}
+    .it.tgt{outline-color:#eee;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>影片縮圖總覽 Contact Sheet</h1>
+  <p class="sub">兩種做法都會產出一張 sheet 圖，直接丟給 Claude。檔案不會上傳，全程在你的瀏覽器內處理。</p>
+
+  <div class="tabs">
+    <button class="tab on" data-mode="video">從影片截圖</button>
+    <button class="tab" data-mode="photo">照片拼圖</button>
+  </div>
+
+  <!-- ===== 影片模式 ===== -->
+  <div class="panel on" id="p-video">
+    <div class="drop" id="drop">把影片拖到這裡，或 <b>點一下選檔</b></div>
+    <input type="file" id="file" accept="video/*" style="display:none">
+    <div class="row">
+      <label>截圖張數<input type="number" id="count" value="20" min="4" max="100"></label>
+      <label>每列幾張<input type="number" id="cols" value="4" min="1" max="10"></label>
+      <label>單張寬度 px<input type="number" id="tw" value="480" min="160" max="960" step="40"></label>
+    </div>
+  </div>
+
+  <!-- ===== 照片模式 ===== -->
+  <div class="panel" id="p-photo">
+    <div class="drop" id="pdrop">把同一支影片的截圖（可一次多張）拖到這裡，或 <b>點一下選檔</b></div>
+    <input type="file" id="pfile" accept="image/*" multiple style="display:none">
+    <div id="plist"></div>
+    <p class="hint" id="phint" style="display:none">可拖曳縮圖調整順序，點右上角 × 移除。</p>
+    <div class="row">
+      <label>排序
+        <select id="psort">
+          <option value="name">檔名（自然排序）</option>
+          <option value="time">修改時間</option>
+          <option value="name-desc">檔名（倒序）</option>
+          <option value="time-desc">修改時間（新→舊）</option>
+        </select>
+      </label>
+      <button class="btn sm" id="pdosort" disabled>套用排序</button>
+      <button class="btn sm" id="pclear" disabled>清空</button>
+    </div>
+    <div class="row">
+      <label>標題<input type="text" id="ptitle" class="wide" placeholder="例如：影片名稱"></label>
+      <label>每列幾張<input type="number" id="pcols" value="4" min="1" max="12"></label>
+      <label>單張寬度 px<input type="number" id="ptw" value="480" min="120" max="960" step="40"></label>
+      <label>格子比例
+        <select id="pratio">
+          <option value="auto">依第一張</option>
+          <option value="1.7778">16:9</option>
+          <option value="1.3333">4:3</option>
+          <option value="1">1:1</option>
+          <option value="0.5625">9:16（直式）</option>
+        </select>
+      </label>
+      <label>填滿方式
+        <select id="pfit"><option value="contain">完整顯示（留邊）</option><option value="cover">填滿裁切</option></select>
+      </label>
+      <label>角標
+        <select id="plabel"><option value="idx">序號</option><option value="name">檔名</option><option value="none">無</option></select>
+      </label>
+    </div>
+  </div>
+
+  <!-- ===== 共用 ===== -->
+  <div class="row">
+    <label>輸出格式
+      <select id="fmt"><option value="jpeg">JPEG（較小）</option><option value="png">PNG（無損）</option></select>
+    </label>
+    <label>圖片底色
+      <select id="theme"><option value="auto">跟隨系統</option><option value="light">白底</option><option value="dark">黑底</option></select>
+    </label>
+    <button class="btn" id="go" disabled>生成</button>
+    <button class="btn" id="dl" disabled>下載圖片</button>
+  </div>
+
+  <div id="bar"><i></i></div>
+  <div id="status"></div>
+  <canvas id="out" width="10" height="10" style="display:none"></canvas>
+</div>
+
+<script>
+(function(){
+  var $ = function(id){return document.getElementById(id);};
+  var out=$('out'), status=$('status'), bar=$('bar').firstChild, go=$('go'), dl=$('dl');
+  var mode='video', busy=false, outName='contact sheet';
+  var FONT='"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,Arial,sans-serif';
+
+  // ---------- 影片狀態 ----------
+  var drop=$('drop'), fileIn=$('file'), file=null, url=null;
+  // ---------- 照片狀態 ----------
+  var items=[]; // {file, url, id}
+  var uid=0;
+
+  // 關閉分頁／重新整理前的提醒
+  window.addEventListener('beforeunload',function(e){
+    if(file||items.length||busy){ e.preventDefault(); e.returnValue=''; return ''; }
+  });
+
+  // ---------- 分頁切換 ----------
+  Array.prototype.forEach.call(document.querySelectorAll('.tab'),function(t){
+    t.onclick=function(){
+      if(busy) return;
+      mode=t.getAttribute('data-mode');
+      Array.prototype.forEach.call(document.querySelectorAll('.tab'),function(x){x.classList.toggle('on',x===t);});
+      $('p-video').classList.toggle('on',mode==='video');
+      $('p-photo').classList.toggle('on',mode==='photo');
+      refreshGo();
+      status.textContent='';
+    };
+  });
+  function refreshGo(){
+    go.disabled = mode==='video' ? !file : items.length<1;
+  }
+
+  // ---------- 共用工具 ----------
+  function wireDrop(el,input,handler){
+    el.onclick=function(){input.click();};
+    input.onchange=function(){ if(input.files.length) handler(input.files); input.value=''; };
+    ['dragenter','dragover'].forEach(function(e){el.addEventListener(e,function(ev){ev.preventDefault();el.classList.add('over');});});
+    ['dragleave','drop'].forEach(function(e){el.addEventListener(e,function(ev){ev.preventDefault();el.classList.remove('over');});});
+    el.addEventListener('drop',function(ev){ if(ev.dataTransfer.files.length) handler(ev.dataTransfer.files); });
+  }
+  function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+  function fmtTime(s){
+    s=Math.max(0,Math.floor(s));
+    var h=Math.floor(s/3600), m=Math.floor(s%3600/60), x=s%60;
+    var p=function(n){return (n<10?'0':'')+n;};
+    return p(h)+':'+p(m)+':'+p(x);
+  }
+  function fmtSize(b){
+    if(b>=1073741824) return (b/1073741824).toFixed(2)+' GB';
+    return (b/1048576).toFixed(1)+' MB';
+  }
+  function fmtDate(ms){
+    var d=new Date(ms), p=function(n){return (n<10?'0':'')+n;};
+    return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());
+  }
+  function theme(){
+    var tv=$('theme').value;
+    var isDark = tv==='dark' || (tv==='auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    return isDark
+      ? {bg:'#141414', fg:'#eeeeee', sub:'#9a9a9a', cell:'#202020', stampBg:'rgba(0,0,0,.72)', stampFg:'#f2f2f2'}
+      : {bg:'#ffffff', fg:'#222222', sub:'#666666', cell:'#f2f2f2', stampBg:'rgba(255,255,255,.88)', stampFg:'#222222'};
+  }
+  function fitText(g,text,maxW){
+    if(g.measureText(text).width<=maxW) return text;
+    while(text.length>1 && g.measureText(text+'…').width>maxW) text=text.slice(0,-1);
+    return text+'…';
+  }
+  function stamp(g,T,label,x,y,TW,TH){
+    var fs=Math.max(13,Math.round(TW/28));
+    g.font='600 '+fs+'px '+FONT;
+    label=fitText(g,label,TW-24);
+    var tw=g.measureText(label).width, th=fs+8;
+    g.fillStyle=T.stampBg; g.fillRect(x+TW-tw-16,y+TH-th-6,tw+12,th);
+    g.fillStyle=T.stampFg; g.textBaseline='middle';
+    g.fillText(label,x+TW-tw-10,y+TH-th/2-6);
+    g.textBaseline='top';
+  }
+  function header(g,T,W,headH,pad,title,info){
+    g.fillStyle=T.fg; g.textBaseline='top';
+    g.font='600 26px '+FONT;
+    g.fillText(fitText(g,title,W-pad*2),pad,pad);
+    g.font='400 18px '+FONT; g.fillStyle=T.sub;
+    g.fillText(fitText(g,info,W-pad*2),pad,pad+42);
+    g.fillStyle=T.fg; g.fillRect(pad,headH-8,W-pad*2,1.5);
+  }
+  function done(msg){
+    bar.style.width='100%';
+    status.textContent=msg;
+    busy=false; refreshGo(); dl.disabled=false;
+  }
+
+  // =====================================================
+  //  影片模式
+  // =====================================================
+  wireDrop(drop,fileIn,function(fl){ setFile(fl[0]); });
+
+  function setFile(f){
+    file=f; if(url) URL.revokeObjectURL(url); url=URL.createObjectURL(f);
+    drop.innerHTML='已選：<b>'+esc(f.name)+'</b>（點一下可換檔）';
+    dl.disabled=true; refreshGo(); status.textContent='準備好了，按「生成」。';
+  }
+  function seek(v,t){
+    return new Promise(function(res){
+      var d=false;
+      function fin(){ if(d) return; d=true; v.removeEventListener('seeked',fin); clearTimeout(tm); res(); }
+      var tm=setTimeout(fin,8000);
+      v.addEventListener('seeked',fin);
+      v.currentTime=t;
+    });
+  }
+
+  async function genVideo(){
+    var N=Math.min(100,Math.max(4,+$('count').value||20));
+    var C=Math.min(10,Math.max(1,+$('cols').value||4));
+    var TW=Math.min(960,Math.max(160,+$('tw').value||480));
+
+    var v=document.createElement('video');
+    v.muted=true; v.playsInline=true; v.preload='auto'; v.src=url;
+    status.textContent='讀取影片中…';
+    try{
+      await new Promise(function(res,rej){ v.onloadedmetadata=res; v.onerror=function(){rej();}; });
+    }catch(e){
+      status.textContent='這支影片瀏覽器讀不了（編碼不支援，例如部分 H.265/MKV）。可改用 Chrome／Edge，或先轉成 MP4。';
+      busy=false; refreshGo(); return;
+    }
+    var dur=v.duration, vw=v.videoWidth, vh=v.videoHeight;
+    var TH=Math.round(TW*vh/vw);
+    var gap=10, pad=20, headH=110, T=theme();
+    var rows=Math.ceil(N/C);
+    var W=pad*2+C*TW+(C-1)*gap;
+    var H=headH+pad+rows*TH+(rows-1)*gap+pad;
+
+    out.width=W; out.height=H; out.style.display='block';
+    var g=out.getContext('2d');
+    g.fillStyle=T.bg; g.fillRect(0,0,W,H);
+    header(g,T,W,headH,pad,file.name,'長度 '+fmtTime(dur)+'    解析度 '+vw+'×'+vh+'    大小 '+fmtSize(file.size)+'    '+N+' 張等距截圖');
+
+    for(var i=0;i<N;i++){
+      var t=dur*(i+0.5)/N;
+      status.textContent='截圖 '+(i+1)+' / '+N+'…';
+      bar.style.width=((i+1)/N*100)+'%';
+      await seek(v,t);
+      var x=pad+(i%C)*(TW+gap), y=headH+pad+Math.floor(i/C)*(TH+gap);
+      g.drawImage(v,x,y,TW,TH);
+      stamp(g,T,fmtTime(t),x,y,TW,TH);
+    }
+    outName='contact sheet_'+file.name.replace(/\.[^.]+$/,'');
+    v.removeAttribute('src'); v.load();
+    done('完成。圖片 '+W+'×'+H+'，可按「下載圖片」。');
+  }
+
+  // =====================================================
+  //  照片拼圖模式
+  // =====================================================
+  var pdrop=$('pdrop'), pfile=$('pfile'), plist=$('plist');
+  wireDrop(pdrop,pfile,addPhotos);
+
+  function addPhotos(fl){
+    var added=0;
+    Array.prototype.forEach.call(fl,function(f){
+      if(!/^image\//.test(f.type) && !/\.(jpe?g|png|webp|gif|bmp|avif|heic)$/i.test(f.name)) return;
+      items.push({file:f,url:URL.createObjectURL(f),id:++uid}); added++;
+    });
+    if(!added){ status.textContent='沒有找到圖片檔。'; return; }
+    sortItems(); // 新加入時依目前選擇的排序整理
+    renderList();
+    status.textContent='已加入 '+added+' 張，共 '+items.length+' 張。按「生成」。';
+  }
+  function natCmp(a,b){ return a.localeCompare(b,undefined,{numeric:true,sensitivity:'base'}); }
+  function sortItems(){
+    var s=$('psort').value;
+    items.sort(function(a,b){
+      var r = s.indexOf('name')===0 ? natCmp(a.file.name,b.file.name) : (a.file.lastModified-b.file.lastModified);
+      if(r===0) r=natCmp(a.file.name,b.file.name);
+      return /-desc$/.test(s) ? -r : r;
+    });
+  }
+  function renderList(){
+    plist.innerHTML='';
+    items.forEach(function(it,i){
+      var d=document.createElement('div');
+      d.className='it'; d.draggable=true; d.title=it.file.name;
+      d.innerHTML='<img alt="" loading="lazy" src="'+it.url+'"><span class="n">'+(i+1)+'</span><span class="x" title="移除">×</span>';
+      d.querySelector('.x').onclick=function(ev){
+        ev.stopPropagation();
+        URL.revokeObjectURL(it.url); items.splice(items.indexOf(it),1); renderList();
+      };
+      d.addEventListener('dragstart',function(ev){ dragId=it.id; d.classList.add('drag'); ev.dataTransfer.effectAllowed='move'; try{ev.dataTransfer.setData('text/plain','x');}catch(e){} });
+      d.addEventListener('dragend',function(){ dragId=null; renderList(); });
+      d.addEventListener('dragover',function(ev){ if(dragId==null) return; ev.preventDefault(); d.classList.add('tgt'); });
+      d.addEventListener('dragleave',function(){ d.classList.remove('tgt'); });
+      d.addEventListener('drop',function(ev){
+        if(dragId==null) return; ev.preventDefault(); ev.stopPropagation();
+        var from=items.findIndex(function(x){return x.id===dragId;}), to=items.indexOf(it);
+        if(from>=0 && from!==to){ var m=items.splice(from,1)[0]; items.splice(to,0,m); }
+        dragId=null; renderList();
+      });
+      plist.appendChild(d);
+    });
+    var has=items.length>0;
+    $('phint').style.display=has?'block':'none';
+    $('pdosort').disabled=!has; $('pclear').disabled=!has;
+    pdrop.innerHTML = has ? '已加入 <b>'+items.length+'</b> 張（可繼續拖入或點一下新增）' : '把同一支影片的截圖（可一次多張）拖到這裡，或 <b>點一下選檔</b>';
+    refreshGo();
+  }
+  var dragId=null;
+  $('pdosort').onclick=function(){ sortItems(); renderList(); };
+  $('pclear').onclick=function(){
+    items.forEach(function(it){URL.revokeObjectURL(it.url);}); items=[]; renderList();
+    dl.disabled=true; status.textContent='';
+  };
+
+  function loadBitmap(f,u){
+    if(window.createImageBitmap){
+      return createImageBitmap(f).catch(function(){return loadImg(u);});
+    }
+    return loadImg(u);
+  }
+  function loadImg(u){
+    return new Promise(function(res,rej){
+      var im=new Image(); im.onload=function(){res(im);}; im.onerror=function(){rej(new Error('load'));}; im.src=u;
+    });
+  }
+  function dims(b){ return {w:b.naturalWidth||b.width, h:b.naturalHeight||b.height}; }
+
+  async function genPhoto(){
+    var N=items.length;
+    var C=Math.min(12,Math.max(1,+$('pcols').value||4));
+    var TW=Math.min(960,Math.max(120,+$('ptw').value||480));
+    var fit=$('pfit').value, lab=$('plabel').value, rv=$('pratio').value;
+    var title=($('ptitle').value||'').trim()||'照片拼圖';
+    var T=theme();
+
+    // 比例：依第一張或固定
+    var ratio;
+    if(rv==='auto'){
+      status.textContent='讀取第一張…';
+      try{
+        var b0=await loadBitmap(items[0].file,items[0].url), d0=dims(b0);
+        ratio=d0.w/d0.h; if(b0.close) b0.close();
+      }catch(e){ ratio=16/9; }
+    } else ratio=+rv;
+
+    var gap=10, pad=20, headH=110, rows=Math.ceil(N/C);
+    // 畫布上限保護（瀏覽器約 32767px / 2.6 億像素）
+    var TH, W, H, shrunk=false;
+    for(;;){
+      TH=Math.round(TW/ratio);
+      W=pad*2+C*TW+(C-1)*gap;
+      H=headH+pad+rows*TH+(rows-1)*gap+pad;
+      if((H<=30000 && W*H<=200e6) || TW<=60) break;
+      TW=Math.floor(TW*0.9); shrunk=true;
+    }
+
+    out.width=W; out.height=H; out.style.display='block';
+    var g=out.getContext('2d');
+    g.fillStyle=T.bg; g.fillRect(0,0,W,H);
+
+    var total=0, tmin=Infinity, tmax=-Infinity;
+    items.forEach(function(it){ total+=it.file.size; tmin=Math.min(tmin,it.file.lastModified); tmax=Math.max(tmax,it.file.lastModified); });
+    var dateStr = fmtDate(tmin)===fmtDate(tmax) ? fmtDate(tmin) : fmtDate(tmin)+' ~ '+fmtDate(tmax);
+    header(g,T,W,headH,pad,title,N+' 張照片    '+dateStr+'    共 '+fmtSize(total));
+
+    var failed=0;
+    for(var i=0;i<N;i++){
+      status.textContent='拼圖 '+(i+1)+' / '+N+'…';
+      bar.style.width=((i+1)/N*100)+'%';
+      var x=pad+(i%C)*(TW+gap), y=headH+pad+Math.floor(i/C)*(TH+gap);
+      g.fillStyle=T.cell; g.fillRect(x,y,TW,TH);
+      try{
+        var bm=await loadBitmap(items[i].file,items[i].url), d=dims(bm);
+        var s = fit==='cover' ? Math.max(TW/d.w,TH/d.h) : Math.min(TW/d.w,TH/d.h);
+        var dw=d.w*s, dh=d.h*s;
+        g.save(); g.beginPath(); g.rect(x,y,TW,TH); g.clip();
+        g.imageSmoothingQuality='high';
+        g.drawImage(bm,x+(TW-dw)/2,y+(TH-dh)/2,dw,dh);
+        g.restore();
+        if(bm.close) bm.close();
+      }catch(e){ failed++; }
+      if(lab!=='none') stamp(g,T,lab==='idx'?String(i+1):items[i].file.name.replace(/\.[^.]+$/,''),x,y,TW,TH);
+    }
+    outName=title==='照片拼圖'?'photo sheet':'photo sheet_'+title.replace(/[\\\/:*?"<>|]/g,'_');
+    var msg='完成。圖片 '+W+'×'+H+'，可按「下載圖片」。';
+    if(shrunk) msg+=' （照片太多，已自動縮小單張寬度為 '+TW+'px 以免超出瀏覽器畫布上限。）';
+    if(failed) msg+=' 有 '+failed+' 張讀取失敗（格式不支援），已留空。';
+    done(msg);
+  }
+
+  // =====================================================
+  //  生成／下載
+  // =====================================================
+  go.onclick=async function(){
+    if(busy) return;
+    if(mode==='video' ? !file : !items.length) return;
+    busy=true; go.disabled=true; dl.disabled=true;
+    try{
+      if(mode==='video') await genVideo(); else await genPhoto();
+    }catch(e){
+      status.textContent='生成失敗：'+(e&&e.message?e.message:'未知錯誤');
+      busy=false; refreshGo();
+    }
+  };
+
+  dl.onclick=function(){
+    var f=$('fmt').value;
+    out.toBlob(function(b){
+      if(!b){ status.textContent='輸出失敗（圖片可能太大），請減少張數或縮小單張寬度。'; return; }
+      var a=document.createElement('a');
+      a.href=URL.createObjectURL(b);
+      a.download=outName+'.'+(f==='png'?'png':'jpg');
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function(){URL.revokeObjectURL(a.href);},2000);
+    }, f==='png'?'image/png':'image/jpeg', 0.9);
+  };
+})();
+</script>
+</body>
+</html>
